@@ -10,8 +10,8 @@
 
 		<style>
 		   	body {
-				background: url('res/parede.jpg') top left no-repeat;
-				background-size: cover;
+				background: url('res/quadro.png') top left;
+				background-size: 100%;
 				width: 100%;
 				height: 100%;
 				margin: 0;
@@ -20,8 +20,8 @@
 
 			#quadro {
 				position: relative;
-				background: url('res/quadro.png') center center no-repeat;
-				background-size: cover;
+				/*background: url('res/quadro.png') center center no-repeat;
+				background-size: cover;*/
 				width: 100%;
 				height: 100%;
 			}
@@ -82,6 +82,24 @@
 			.aluno img.active {
 				opacity: 1;
 			}
+
+			.aluno .numeros {
+				margin-top: 2em;
+				color: white;
+				font-size: 5em;
+				position: absolute;
+				display: block;
+				width: 100%;
+				text-align: center;
+				opacity: 0;
+				transition: .3s ease all;
+				font-weight: bold;
+			}
+
+			.aluno .numeros.active {
+				opacity: 1;
+			}
+
 
 			#reiniciar {
 				text-align: center;
@@ -149,6 +167,17 @@
 					$('#aluno-centena').find('.maos').removeClass('active');
 					$('#aluno-centena').find('.mao0').addClass('active');
 
+
+					$('#aluno-unidade').find('.numeros').removeClass('active');
+					$('#aluno-unidade').find('.numero0').addClass('active');
+
+					$('#aluno-dezena').find('.numeros').removeClass('active');
+					$('#aluno-dezena').find('.numero0').addClass('active');
+
+					$('#aluno-centena').find('.numeros').removeClass('active');
+					$('#aluno-centena').find('.numero0').addClass('active');
+
+
 					$('.passar-centena').addClass('disabled');
 					$('.passar-dezena').addClass('disabled');
 					$('#adicionar-1').removeClass('disabled');
@@ -159,6 +188,9 @@
 						unidade = unidade + 1;
 						$('#aluno-unidade').find('.maos').removeClass('active');
 						$('#aluno-unidade').find('.mao'+unidade).addClass('active');
+
+						$('#aluno-unidade').find('.numeros').removeClass('active');
+						$('#aluno-unidade').find('.numero'+unidade).addClass('active');
 					} 
 					if (unidade == 10) {
 						$('.passar-dezena').removeClass('disabled');
@@ -173,9 +205,15 @@
 						$('#aluno-unidade').find('.maos').removeClass('active');
 						$('#aluno-unidade').find('.mao0').addClass('active');
 
+						$('#aluno-unidade').find('.numeros').removeClass('active');
+						$('#aluno-unidade').find('.numero0').addClass('active');
+
 						dezena = dezena + 1;
 						$('#aluno-dezena').find('.maos').removeClass('active');
 						$('#aluno-dezena').find('.mao'+dezena).addClass('active');
+
+						$('#aluno-dezena').find('.numeros').removeClass('active');
+						$('#aluno-dezena').find('.numero'+dezena).addClass('active');
 
 						$('#adicionar-1').removeClass('disabled');
 						$('.passar-dezena').addClass('disabled');
@@ -192,9 +230,15 @@
 						$('#aluno-dezena').find('.maos').removeClass('active');
 						$('#aluno-dezena').find('.mao0').addClass('active');
 
+						$('#aluno-dezena').find('.numeros').removeClass('active');
+						$('#aluno-dezena').find('.numero0').addClass('active');
+
 						centena = centena + 1;
 						$('#aluno-centena').find('.maos').removeClass('active');
 						$('#aluno-centena').find('.mao'+centena).addClass('active');
+
+						$('#aluno-centena').find('.numeros').removeClass('active');
+						$('#aluno-centena').find('.numero'+dezena).addClass('active');
 
 						$('.passar-centena').addClass('disabled');
 					} 
@@ -211,6 +255,18 @@
 		<div id="quadro-content">
 			<div id="aluno-unidade" class="aluno">
 				<p class="title">Unidade</p>
+
+				<p class="numeros numero0 active">0</p>
+				<p class="numeros numero1">1</p>
+				<p class="numeros numero2">2</p>
+				<p class="numeros numero3">3</p>
+				<p class="numeros numero4">4</p>
+				<p class="numeros numero5">5</p>
+				<p class="numeros numero6">6</p>
+				<p class="numeros numero7">7</p>
+				<p class="numeros numero8">8</p>
+				<p class="numeros numero9">9</p>
+				<p class="numeros numero10">10</p>
 
 				<img class="maos mao0 active" alt="Mão com valor 0" src="res/0.png" />
 				<img class="maos mao1" alt="Mão com valor 1" src="res/1.png" />
@@ -230,6 +286,18 @@
 			<div id="aluno-dezena" class="aluno">
 				<p class="title">Dezena</p>
 
+				<p class="numeros numero0 active">0</p>
+				<p class="numeros numero1">1</p>
+				<p class="numeros numero2">2</p>
+				<p class="numeros numero3">3</p>
+				<p class="numeros numero4">4</p>
+				<p class="numeros numero5">5</p>
+				<p class="numeros numero6">6</p>
+				<p class="numeros numero7">7</p>
+				<p class="numeros numero8">8</p>
+				<p class="numeros numero9">9</p>
+				<p class="numeros numero10">10</p>
+
 				<img class="maos mao0 active" alt="Mão com valor 0" src="res/0.png" />
 				<img class="maos mao1" alt="Mão com valor 1" src="res/1.png" />
 				<img class="maos mao2" alt="Mão com valor 2" src="res/2.png" />
@@ -248,6 +316,18 @@
 				
 			<div id="aluno-centena" class="aluno">
 				<p class="title">Centena</p>
+
+				<p class="numeros numero0 active">0</p>
+				<p class="numeros numero1">1</p>
+				<p class="numeros numero2">2</p>
+				<p class="numeros numero3">3</p>
+				<p class="numeros numero4">4</p>
+				<p class="numeros numero5">5</p>
+				<p class="numeros numero6">6</p>
+				<p class="numeros numero7">7</p>
+				<p class="numeros numero8">8</p>
+				<p class="numeros numero9">9</p>
+				<p class="numeros numero10">10</p>
 
 				<img class="maos mao0 active" alt="Mão com valor 0" src="res/0.png" />
 				<img class="maos mao1" alt="Mão com valor 1" src="res/1.png" />
