@@ -10,6 +10,7 @@
 
 		<style>
 		   	body {
+		   		font-size: 0.8em;
 		   		font-family: sans-serif;
 		   		color: #000;
 				background: #eee;
@@ -33,6 +34,11 @@
 				position: relative;
 			}
 
+			p {
+				text-align: justify;
+  				text-justify: inter-word;
+			}
+
 			canvas {
 				position: absolute;
 				border: 3px solid #000;
@@ -47,7 +53,7 @@
 				display: none;
 				left: 0; top: 3px;
 				height: 100px;
-				z-index: 0;
+				z-index: 1;
 			}
 
 			.tubo-container .speaker.active { display: block }
@@ -68,16 +74,18 @@
 				width: 500px;
 			}
 
+			input[type=text] {
+				width: 60px;
+			}
+
 			#turnOff { display: none }
 
 			#mic-intensity { color: #0000ff; }
-
-			@media only screen and (max-width: 600px) {
-				
-
-			}
+			#mic-x { color: #0000ff; }
+			.blue { color: #0000ff; }
 		</style>
 		<script src="res/jquery.min.js"></script>
+
 		<script>
 			function plotSine(ctx, t, n) {
 			    var width = 500;
@@ -159,11 +167,15 @@
 				$('#turnOn').click(function(){
 					$(this).hide();
 					$('#turnOff').show();
+					$('#speakeroff').hide();
+					$('#speakeron').show();
 					isRunning = true;
 				});
 
 				//End
 				$('#turnOff').click(function(){
+					$('#speakeron').hide();
+					$('#speakeroff').show();
 					$(this).hide();
 		  		  	ctx.clearRect(0, 0, 500, 100);
 					$('#turnOn').show();
@@ -188,13 +200,17 @@
 		<div class="container">
 			<h1>Experimento com um tubo de som</h1>
 
-			<p>Neste experimento virtual temos um tubo fechado de comprimento <em>L = 1m</em>. Em uma das pontas temos um alto falante que emite ondas sonoras de frequência <em>f</em> e velocidade <em>v</em>. Dentro do tubo tem um microfone que pode ser movido no eixo horizontal utilizando a barra abaixo do tubo.</p>
+			<p>Neste experimento virtual utilizaremos um tubo fechado de comprimento <em>L = 1m</em>. Em uma das pontas do tubo se encontra um alto-falante que emite ondas sonoras de frequência <em>f</em> e velocidade <em>v</em>. Dentro do tubo tem um microfone que pode ser movido no eixo horizontal utilizando a barra abaixo do tubo.</p>
 
-			<p>O valor máximo do sinal obtido pelo microfone em certa posição <em>x</em> é marcada na tela. O objetivo do experimento é utilizar esses dados para verificar as características da onda formada, qual é o número do harmônico dela? O que acontece quando se muda o gás dentro do tubo? Quando alteramos a frequência da onda de som? Existe um valor mínimo de frequência para aparecer uma onda estacionária? E um valor máximo?</p> 
+			<p>O valor máximo do sinal obtido pelo microfone em certa posição <em>x</em> é marcada na tela. O objetivo do experimento é utilizar esses dados para verificar as algumas das características da onda formada. Qual é o número do harmônico dela? O que acontece quando se muda o gás dentro do tubo? Quando alteramos a frequência da onda de som? Existe um valor mínimo de frequência para aparecer uma onda estacionária? E um valor máximo?</p> 
+
+			<p>Para iniciar o experimento basta clicar em alguma das configurações, ou inserir os valores manualmente e então apertar "Ligar alto-falante". Depois basta mover o microfone e avaliar como é dada a mudança no valor do sinal acima.</p>
+
+			<p>Depois da análise basta apertar em "mostrar representação da onda estacionária resultante" para uma visualização da onda de som no tubo. A onda está na forma que você esperava?</p>
 
 			<h2>Ajuste manual do experimento</h2>
-			<p>Velocidade do som (<em>v</em>) <input id="speed" type="text" value="340">m/s</p>
-			<p>Frequência do som (<em>f</em>) <input id="frequency" type="text" value="440">Hz</p>
+			<p>Velocidade do som (<em>v</em>) <input id="speed" type="text" value="340"> ms<sup>-1</sup></p>
+			<p>Frequência do som (<em>f</em>) <input id="frequency" type="text" value="440"> Hz</p>
 
 			<h2>Algumas configurações</h2>
 			<button id="Exp1">440Hz no ar</button>
@@ -202,17 +218,17 @@
 			<button id="Exp3">880Hz em Hélio</button>
 			<button id="Exp4">1660Hz em Hélio</button>
 
-			<h2>Intensidade máxima do sinal do microfone: <span id="mic-intensity">0</span>dB em x = <span id="mic-x">0.5</span>m</h2>
+			<h2>Intensidade máxima do sinal do microfone: <span id="mic-intensity">0</span><span class="blue">dB</span> em x = <span id="mic-x">0.5</span><span class="blue">m</span></h2>
 
 			<p><input id="show-wave" type="checkbox"> mostrar representação da onda estacionária resultante</p>
 
-			<button id="turnOn">Ligar auto-falante</button>
-			<button id="turnOff">Desligar auto-falante</button>
+			<button id="turnOn">Ligar alto-falante</button>
+			<button id="turnOff">Desligar alto-falante</button>
 
 			<div class="tubo-container">
 		    	<canvas id="tubo1" width="500" height="100"></canvas>
-				<img alt="" class="speaker" src="res/on.png"/>
-				<img alt="" class="speaker active" src="res/off.png"/>
+				<img alt="" id="speakeron" class="speaker" src="res/on.png"/>
+				<img alt="" id="speakeroff" class="speaker active" src="res/off.png"/>
 				<img alt="" id="mic" src="res/mic.png"/>
 
 				<input id="mic-position" type="range" min="0" max="500" value="312"/>
