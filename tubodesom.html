@@ -111,7 +111,7 @@
 
 					if (isRunning) { 
 						// Always update
-						$('#mic-intensity').html( parseInt(50 * Math.sin( $('#mic-position').val() * n * 3.141592358 / 500 )));
+						$('#mic-intensity').html( Math.abs(parseInt(50 * Math.sin( $('#mic-position').val() * n * 3.141592358 / 500 ))));
 			  		  	ctx.clearRect(0, 0, 500, 100);
 
 			  		  	// Draw wave
