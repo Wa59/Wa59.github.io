@@ -1,0 +1,180 @@
+
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0'">
+		
+		<!--link rel="icon" type="image/png" href="res/favicon.png"-->
+
+		<title>Experimento com um tubo de som</title>
+
+		<style>
+		   	body {
+		   		font-family: sans-serif;
+		   		color: #000;
+				background: #bbb;
+				width: 100%;
+				height: 100%;
+				margin: 0;
+				padding: 0;
+			}
+
+			.container {
+				margin: 1em auto 0 auto;
+				width: 800px;
+				max-width: 90%;
+			}
+
+
+			.tubo-container {
+				margin-top: 2em;
+				height: 100px;
+				position: relative;
+			}
+
+			canvas {
+				position: absolute;
+				border: 3px solid #000;
+				margin: 0 auto;
+				background: white;
+				top: 0; left: 70px;
+				z-index: 0;
+			}
+
+			.tubo-container .speaker {
+				position: absolute;
+				display: none;
+				left: 0; top: 3px;
+				height: 100px;
+				z-index: 1;
+			}
+
+			.tubo-container .speaker.active { display: block }
+
+			.tubo-container #mic {
+				position: absolute;
+				left: 550px; top: 40px;
+				width: 20px;
+				z-index: 1;
+			}
+
+			.tubo-container #mic-position {
+				position: absolute;
+				margin: 0 auto;
+				background: white;
+				bottom: -50px; left: 70px;
+				z-index: 0;
+				width: 500px;
+			}
+
+			#turnOff { display: none }
+
+			@media only screen and (max-width: 600px) {
+				
+
+			}
+		</style>
+		<script src="res/jquery.min.js"></script>
+		<script>
+
+			function plotSine(ctx, t, n) {
+			    var width = 500;
+			    var height = 100;
+
+			    ctx.beginPath();
+			    ctx.lineWidth = 2;
+			    ctx.strokeStyle = "rgb(255,0,0)";
+
+			    var x = 0;
+			    var y = 0;
+			    var amplitude = 40;
+
+			    while (x < width) {
+			    	y = 50 * Math.sin( x * n * 3.141592358 / 500 ) * Math.sin(t);
+			        ctx.lineTo(x, y + 50);
+			        x = x + 1;
+			    }
+			    ctx.stroke();
+			}
+
+			$(document).ready(function() {
+				var isRunning = false;
+				var canvas = document.getElementById('tubo1');
+				var ctx = canvas.getContext('2d');
+				var t = 0;
+				var n = parseInt(2 * parseFloat( $('#frequency').val() ) / parseFloat( $('#speed').val() ));
+
+				setInterval(function(){
+					// Mic position
+					var left = parseInt($('#mic-position').val()) + 50;
+					$('#mic').css('left', left + "px");
+
+					if (isRunning) { 
+						// Always update
+						$('#mic-intensity').html( parseInt(50 * Math.sin( $('#mic-position').val() * n * 3.141592358 / 500 )));
+			  		  	ctx.clearRect(0, 0, 500, 100);
+
+			  		  	// Draw wave
+						if ($('#show-wave').is(":checked")){ 
+							t = t + 0.25;
+							plotSine(ctx, t , n);
+						}
+					}
+				}, 16);
+
+				//Start
+				$('#turnOn').click(function(){
+					$(this).hide();
+					$('#turnOff').show();
+					isRunning = true;
+				});
+
+				//End
+				$('#turnOff').click(function(){
+					$(this).hide();
+					$('#turnOn').show();
+					t = 0;
+					isRunning = false;
+					$('#mic-intensity').html('0');
+
+				});
+
+				// Changed wave parameters
+				$('#speed').change(function(){
+					n = parseInt(2 * parseFloat( $('#frequency').val() ) / parseFloat( $('#speed').val() ));
+				});
+				$('#frequency').change(function(){
+					n = parseInt(2 * parseFloat( $('#frequency').val() ) / parseFloat( $('#speed').val() ));
+				});
+			});
+		</script>
+	</head>
+
+	<body>
+		<div class="container">
+			<h1>Experimento com um tubo de som</h1>
+
+			<p>Neste experimento virtual temos um tubo de comprimento L = 1m.</p>
+
+			<h2>Ajuste do experimento</h2>
+			<p><input id="show-wave" type="checkbox" checked="checked"> mostrar onda</p>
+			<p>Velocidade do som <input id="speed" type="text" value="340">m/s</p>
+			<p>Frequência do som <input id="frequency" type="text" value="440">Hz</p>
+
+			<h2>Intensidade máxima do sinal do microfone: <span id="mic-intensity">0</span>dB</h2>
+
+			<button id="turnOn">Ligar auto-falante</button>
+			<button id="turnOff">Desligar auto-falante</button>
+
+			<div class="tubo-container">
+		    	<canvas id="tubo1" width="500" height="100"></canvas>
+				<img alt="" class="speaker" src="res/on.png"/>
+				<img alt="" class="speaker active" src="res/off.png"/>
+				<img alt="" id="mic" src="res/mic.png"/>
+				<input id="mic-position" type="range" min="30" max="500" value="500"/>
+		    </div><!-- /.tubo-container -->
+
+
+	    </div><!-- /.container -->
+	</body>
+</html>
