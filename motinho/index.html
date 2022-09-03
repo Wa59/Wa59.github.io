@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt_BR">
+<head>
+	<title>movimento obliquo</title>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="icon" href="motinho.png">
+
+  <style>
+	*, *::before, *::after {
+		box-sizing: border-box;
+	}
+
+	html {
+		height: 100%;
+		font-family: sans-serif;
+		font-weight: bold;
+	}
+
+	body {
+		overflow: hidden;
+		height: 100%;
+		margin: 0;
+		padding: 0;
+	  background-color: #212529;
+	}
+
+	div {
+		position: absolute;
+		background: #bbb;
+	}
+
+	#angulo_txt, #velocidade_txt, #distancia_txt {
+		background: transparent;
+		left: 100px;
+		z-index: 3;
+		color: #fff;
+		top: 20%;
+		text-align: center;
+		width: 300px;
+	}
+	#velocidade_txt { top: calc(20% + 90px); }
+	#distancia_txt { top: calc(20% + 180px); }
+
+	#angulo_txt input { background: rgb(120, 0, 0); }
+	#velocidade_txt input { background: rgb(0, 120, 0); }
+	#distancia_txt input { background: rgb(0, 0, 120); }
+
+	#angulo_txt input:focus { background: rgb(140, 0, 0); }
+	#velocidade_txt input:focus { background: rgb(0, 140, 0); }
+	#distancia_txt input:focus { background: rgb(0, 0, 140); }
+
+	input {
+		font-size: 20px;
+		border: 0;
+		color: #fff;
+		background-color: #888;
+		display: block;
+		width: 100px;
+		margin: 5px auto;
+		font-weight: bold;
+		padding: 0.2em 0.5em;
+	}
+	input:active,input:hover,input:focus {
+		border: 0;
+		outline: 0;
+	}
+
+	label {
+		font-size: 10px;
+	}
+
+	canvas {
+		width: 100%;
+		height: 100%;
+	}
+
+	#moto_sprite {
+		position: absolute;
+		top: 0; left: 0;
+		z-index: 2;
+	}
+  </style>
+
+	<script src="jquery.min.js"></script>
+	<script>
+	$(window).resize(function() {
+		$('body').remove();
+		location.reload(); 
+	});
+
+	$(document).ready(function(){
+
+	var c = document.getElementById("grid");
+	var ctx = c.getContext("2d");
+
+	var angulo = 30;
+  angulo = angulo * (Math.PI/180);
+
+  $('#angulo').change(function(){
+  	angulo = $(this).val();
+  	angulo = angulo * (Math.PI/180);
+  })
+
+	var distancia = 10;
+	var velocidade = 0;
+	var velocidade_y = 0;
+
+  $('#velocidade').change(function(){
+  	velocidade = $(this).val();
+  })
+
+	var largura = 1280;
+	var altura = 720;
+
+	largura = $(window).width();
+	altura = $(window).height();
+
+  ctx.canvas.width  = largura;
+  ctx.canvas.height = altura;
+
+	// moto
+	var moto_x = 0;
+	var moto_y = (altura-70-50);
+	var	angulo_moto = 0;
+
+
+	$('#moto_sprite').css('top',(altura-70-50)+'px');
+
+	// Chao
+  $('body').append('<div class="chao" style="background:#f00;height:5px;left:0;top:'+ (altura-70+7) +'px;width:'+(largura)+'px"></div>');
+  $('body').append('<div class="chao" style="height:20px;left:'+(0)+'px;top:'+ (altura-70) +'px;width:'+(largura/3)+'px"></div>');
+  $('body').append('<div class="chao" style="height:20px;left:'+(largura/3 + distancia*50)+'px;top:'+ (altura-70) +'px;width:'+(largura)+'px"></div>');
+
+  var animation_delay = 4;
+  var graph_delay = 0;
+
+  var graph_points = [];
+
+  function update() {
+  		ctx.clearRect(0, 0, largura, altura);
+
+		  $('#distancia').change(function(){
+		  	distancia = $(this).val();
+		  	$('.chao').remove();
+	  	  $('body').append('<div class="chao" style="background:#f00;height:5px;left:0;top:'+ (altura-70+7) +'px;width:'+(largura)+'px"></div>');
+			  $('body').append('<div class="chao" style="height:20px;left:'+(0)+'px;top:'+ (altura-70) +'px;width:'+(largura/3)+'px"></div>');
+			  $('body').append('<div class="chao" style="height:20px;left:'+(largura/3 + distancia*50)+'px;top:'+ (altura-70) +'px;width:'+(largura)+'px"></div>');
+		  })
+
+			// grid
+			i = altura-70
+			while (i >= 0) {
+		    ctx.beginPath();
+				ctx.moveTo(0, i);
+				ctx.lineTo(largura, i);
+				ctx.lineWidth = 1;
+				ctx.strokeStyle = '#888';
+				ctx.stroke(); 
+		    i = i - 50;
+			 }
+			i = largura
+			while (i >= 0) {
+		    ctx.beginPath();
+				ctx.moveTo(i, 0);
+				ctx.lineTo(i, altura);
+				ctx.lineWidth = 1;
+				ctx.strokeStyle = '#888';
+				ctx.stroke(); 
+		    i = i - 50;
+		  }
+
+  		// rampa
+			//var base_rampa = 80 * Math.cos(angulo);
+			var base_rampa = 80 * Math.cos(angulo);
+			var altura_rampa = 80 * Math.sin(angulo);
+
+		  ctx.beginPath();
+			ctx.moveTo(largura/3, altura - 70 - altura_rampa);
+			ctx.lineTo(largura/3, altura-70);
+			ctx.lineTo((largura/3)-base_rampa, altura-70);
+			ctx.fillStyle = '#bbb';
+			ctx.fill(); 
+
+			// moto
+			moto_x = moto_x + velocidade/2;
+
+			// moto na rampa
+			if (moto_x+50 > (largura/3)-base_rampa && moto_x < (largura/3)) {
+				velocidade_y = Math.sin(angulo)*velocidade/2;
+				moto_y = moto_y - velocidade_y;			
+				angulo_moto = angulo*(-1);
+
+			}
+
+			// moto no ar
+			if (moto_x >= (largura/3)) {
+				velocidade_y = velocidade_y - 0.1;
+				moto_y = moto_y - velocidade_y;			
+				angulo_moto = angulo_moto + 0.01;
+
+				// grafico
+	  		graph_delay--;
+				if (graph_delay <= 0) {
+					graph_delay = 8;
+					point = [moto_x+25, moto_y+25];
+					graph_points.push( point );
+				}
+				for (i=0;i<graph_points.length - 1; i++) {
+					ctx.beginPath();
+					ctx.arc(graph_points[i][0], graph_points[i][1], 4, 0, 2 * Math.PI);
+					ctx.fillStyle = '#f00';
+					ctx.fill(); 
+				}
+			}
+
+			// moto pousada
+			if (moto_x+50 > ((largura/3)+distancia*50) && moto_y > altura-70-50) {
+					angulo_moto = 0;
+					moto_y = altura-70-50;
+			}
+
+			// Moto fora da tela
+			if(moto_y > altura || moto_x > largura || moto_y < 0) {
+				angulo_moto = 0;
+				moto_x = -50;
+				moto_y = altura-70-50;
+				graph_points = [];
+			}
+
+
+			// animacao	
+  		animation_delay--;
+			if (animation_delay <= 0) {
+				animation_delay = 4;
+
+				if (velocidade != 0) {
+					animation_delay = 20/velocidade;
+
+					if ($('#moto_sprite').hasClass('alt')) {
+						$('#moto_sprite').removeClass('alt');
+						$('#moto_sprite').attr('src','motinho.png');
+					} else {
+						$('#moto_sprite').addClass('alt')
+						$('#moto_sprite').attr('src','motinho-alt.png');
+					}
+				}
+			}
+
+			$('#moto_sprite').css('transform','rotate('+(angulo_moto)+'rad)');
+			$('#moto_sprite').css('top',(moto_y)+'px');
+			$('#moto_sprite').css('left',(moto_x)+'px');
+
+  }
+
+	updating = setInterval(update, 16);
+
+  //(tela, (255, 0, 0), (0, parametros.altura-70), (parametros.largura, parametros.altura-70), 5)
+
+	});
+	</script>
+</head>
+
+<body>
+	<div id="angulo_txt">
+		<label>Ângulo da rampa (graus)</label>
+		<input min="1" max="80" type="number" id="angulo" value="30" autocomplete="off">
+	</div>
+	<div id="velocidade_txt">
+		<label>Velocidade (m/s)</label>
+		<input min="0" max="20" type="number" id="velocidade" value="0" autocomplete="off">
+	</div>
+	<div id="distancia_txt">
+		<label>Distância (m)</label>
+		<input min="0" max="20" type="number" id="distancia" value="10" autocomplete="off">
+	</div>
+	<canvas id="grid"></canvas>
+	<img src="motinho.png" id="moto_sprite"/>
+</body>
+</html>
