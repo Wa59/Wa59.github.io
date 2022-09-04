@@ -108,9 +108,9 @@
 	var velocidade_y = 0;
 
   $('#velocidade').change(function(){
-  	velocidade = $(this).val();
-  })
-
+		velocidade = $(this).val();
+	});
+	
 	var largura = 1280;
 	var altura = 720;
 
@@ -124,6 +124,7 @@
 	var moto_x = 0;
 	var moto_y = (altura-70-50);
 	var	angulo_moto = 0;
+	var caiu = false;
 
 
 	$('#moto_sprite').css('top',(altura-70-50)+'px');
@@ -138,10 +139,13 @@
 
   var graph_points = [];
 
+	var a_esquerda = false;
+	var a_direita = false;
+
   function update() {
   		ctx.clearRect(0, 0, largura, altura);
 
-		  $('#distancia').change(function(){
+  	  $('#distancia').change(function(){
 		  	distancia = $(this).val();
 		  	$('.chao').remove();
 	  	  $('body').append('<div class="chao" style="background:#f00;height:5px;left:0;top:'+ (altura-70+7) +'px;width:'+(largura)+'px"></div>');
@@ -183,20 +187,53 @@
 			ctx.fillStyle = '#bbb';
 			ctx.fill(); 
 
-			// moto
-			moto_x = moto_x + velocidade/2;
+			// moto antes da rampa 
+			if (moto_x+50 < (largura/3)-base_rampa) {
+				$('#angulo').removeAttr('disabled');
+				$('#velocidade').removeAttr('disabled');
+				$('#distancia').removeAttr('disabled');
+
+				//controle por teclado
+				$("html").keydown(function(e) {
+            if (e.which == 65 || e.which == 37) { a_esquerda = true;}
+            if (e.which == 68 || e.which == 39) { a_direita = true;}
+        });
+        $("html").keyup(function(e) { 
+            if (e.which == 65 || e.which == 37) { a_esquerda = false;}
+            if (e.which == 68 || e.which == 39) { a_direita = false;}
+        });
+
+        if (a_esquerda) {velocidade = velocidade - 0.5;}
+        if (a_direita) {velocidade = velocidade + 0.5;}
+        if (velocidade > 20) { velocidade = 20; }
+		    if (velocidade < -5) { velocidade = -5; }
+
+				// atrito
+				//if (velocidade > 0) { velocidade = velocidade - 0.1; }
+		    //if (velocidade < 0) { velocidade = velocidade + 0.1; }
+			  if (velocidade != 0) {
+			    $('#velocidade').val(Math.round(velocidade * 10) / 10);
+			  }
+				moto_x = moto_x + velocidade/2;
+			}
+
 
 			// moto na rampa
 			if (moto_x+50 > (largura/3)-base_rampa && moto_x < (largura/3)) {
+				$('#angulo').attr('disabled','disabled');
+				$('#velocidade').attr('disabled','disabled');
+				$('#distancia').attr('disabled','disabled');
+
+				moto_x = moto_x + velocidade/2;
 				velocidade_y = Math.sin(angulo)*velocidade/2;
 				moto_y = moto_y - velocidade_y;			
 				angulo_moto = angulo*(-1);
-
 			}
 
 			// moto no ar
 			if (moto_x >= (largura/3)) {
 				velocidade_y = velocidade_y - 0.1;
+				moto_x = moto_x + velocidade/2;
 				moto_y = moto_y - velocidade_y;			
 				angulo_moto = angulo_moto + 0.01;
 
@@ -215,20 +252,29 @@
 				}
 			}
 
+			// moto nao alcancou o outro lado!
+			if (moto_x+50 <= ((largura/3)+distancia*50) && moto_y > altura-70-50) {
+				caiu = true;
+			}
+
 			// moto pousada
-			if (moto_x+50 > ((largura/3)+distancia*50) && moto_y > altura-70-50) {
+			if (moto_x+50 > ((largura/3)+distancia*50) && moto_y > altura-70-50 && !caiu) {
 					angulo_moto = 0;
 					moto_y = altura-70-50;
 			}
 
 			// Moto fora da tela
-			if(moto_y > altura || moto_x > largura || moto_y < 0) {
+			if(moto_y > altura || 
+				 moto_x > largura ||
+				 moto_x+50 < 0 || 
+				 moto_y < 0) {
+
 				angulo_moto = 0;
 				moto_x = -50;
 				moto_y = altura-70-50;
 				graph_points = [];
+	      caiu = false;
 			}
-
 
 			// animacao	
   		animation_delay--;
@@ -255,9 +301,6 @@
   }
 
 	updating = setInterval(update, 16);
-
-  //(tela, (255, 0, 0), (0, parametros.altura-70), (parametros.largura, parametros.altura-70), 5)
-
 	});
 	</script>
 </head>
