@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+
+<html>
+	<head>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.7.3/p5.js"></script>
+		<script src="complex.js"></script>
+		<script src="fourier.js"></script>
+		<script src="schroedinger.js"></script>
+		<script>
+		let settings = {
+			size:          1024,
+			energy:        -1,
+			median:        0.001,
+			sigma:         0.002,
+			timeStep:      1E-5,
+			stepsPerFrame: 20,
+			potential:     x => 10000*x,
+			scaleFactor:   1,
+			underlay:      null,
+			imageFile:     null
+		};
+
+		let quantumParticle;
+
+		function setup() {
+			frameRate(20);
+			createCanvas(640, 640);
+			settings.underlay = createGraphics(640, 640);
+			background(0);
+			
+			quantumParticle = new Schroedinger(settings);
+		}
+
+		// Draw loop:
+
+		function draw() {
+			quantumParticle.simulationStep();
+		}
+		</script>
+		
+		<title>Questão 3</title>
+		<meta charset="utf-8">
+	</head>
+	<body>
+	</body>
+</html>
