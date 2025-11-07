@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Paralaxe Estelar Exagerada</title>
+    <meta charset="utf-8">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+        }
+        canvas {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+        }
+        input,button {
+          background-color: #ededef;
+          color: #333;
+          border: none;
+          padding: 0.25rem;
+          border-radius: 5px;
+          font-size: 0.75rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all .3s ease;
+        }
+        button {
+          padding: 0.25rem 1rem;
+        }
+        button:hover {
+          background-color: #ababaf;
+          transform: translateY(-2px);
+        }
+        button:active {
+          transform: translateY(0);
+          background-color: #ededef;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gl-canvas"></canvas>
+    <div id="ui-overlay" style="position:fixed;left:5px;top:5px;z-index:999;">
+        <button id="follow-earth">Referência da Terra</button>
+        <button id="follow-sun">Referência do Sol</button>
+        <button id="show-stars">Alternar estrelas</button>
+    </div>
+    <script>
+        let gl;
+        let canvas;
+        let program;
+        let projectionMatrix;
+        let zoom = -35;
+
+        function getRenderingContext() {
+            canvas = document.getElementById("gl-canvas");
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+
+            gl = canvas.getContext("webgl");
+            if (!gl) {
+                console.error("WebGL not supported");
+                return null;
+            }
+
+            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            gl.enable(gl.DEPTH_TEST);
+
+            return gl;
+        }
+
+        const vertexShaderSource = `
+            attribute vec4 a_position;
+            attribute vec3 a_normal;
+            attribute vec3 a_color;
+            attribute vec2 a_texCoord;
+            
+            uniform mat4 u_modelViewMatrix;
+            uniform mat4 u_projectionMatrix;
+            uniform mat4 u_normalMatrix;
+            uniform vec3 u_lightSourcePosition;
+
+            varying vec3 v_normal;
+            varying vec3 v_surfaceToLight;
+            varying vec3 v_surfaceToView;
+            varying vec3 v_color;
+            varying vec2 v_texCoord;
+
+            void main() {
+                vec4 eyePosition = u_modelViewMatrix * a_position;
+                gl_Position = u_projectionMatrix * eyePosition;
+                v_color = a_color; 
+                v_normal = mat3(u_normalMatrix) * a_normal;
+                v_texCoord = a_texCoord;
+                v_surfaceToLight = u_lightSourcePosition - eyePosition.xyz;
+                v_surfaceToView = -eyePosition.xyz;
+            }
+        `;
+
+        const fragmentShaderSource = `
+            precision highp float;
+
+            varying vec3 v_normal;
+            varying vec3 v_surfaceToLight;
+            varying vec3 v_surfaceToView;
+            varying vec3 v_color;
+            varying vec2 v_texCoord;
+            
+            uniform bool u_isSun; 
+            uniform bool u_isMoon;
+            uniform bool u_isGlow;
+            uniform sampler2D u_sampler;
+            
+            const vec3 earthBaseColor = vec3(0.0, 0.5, 1.0); 
+            const vec3 moonBaseColor = vec3(0.4, 0.4, 0.4); 
+            const vec3 sunColor = vec3(1.0, 1.0, 1.0);
+
+            void main() {
+                if (u_isSun) {
+                    vec3 normal = normalize(v_normal);
+                    vec3 viewDir = normalize(v_surfaceToView);
+                    float intensity = dot(normal, viewDir);
+                    intensity = pow(max(intensity, 0.0), 0.5);
+                    vec3 finalColor = sunColor * (0.8 + 0.0 * intensity);
+                    if (u_isGlow) {
+                        float alpha = pow(intensity, 10.0) * 0.5;
+                        gl_FragColor = vec4(finalColor, alpha);
+                    } else {
+                        gl_FragColor = vec4(finalColor, 1.0);
+                    }
+                    return;
+                }
+                
+                vec3 baseColor = u_isMoon ? moonBaseColor : earthBaseColor;
+
+                if (!u_isMoon) {
+                    vec4 tex = texture2D(u_sampler, v_texCoord);
+                    baseColor = mix(baseColor, tex.rgb, 0.95);
+                }
+
+                vec3 normal = normalize(v_normal);
+                vec3 lightDirection = normalize(v_surfaceToLight);
+                
+                float diffuseIntensity = 1.9*max(dot(normal, lightDirection), 0.0);
+
+                const float ambientStrength = 0.15;
+                vec3 ambient = ambientStrength * baseColor;
+                vec3 diffuse = diffuseIntensity * baseColor;
+                vec3 finalColor = ambient + diffuse;
+
+                vec3 viewDir = normalize(v_surfaceToView);
+
+                float fresnelPow = 3.0;
+                float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), fresnelPow);
+               
+                const float atmosphereIntensity = 0.9;
+                const vec3 dayAtmosphereColor = vec3(0.6, 0.75, 1.0);
+                const vec3 redAtmosphereColor = vec3(1.0, 0.3, 0.2);
+
+                if (!u_isMoon) {
+                    float lightDot = max(dot(normal, normalize(lightDirection)), -1.0);
+                    float lightFacing = clamp((lightDot + 1.0) * 0.5, 0.0, 1.0);
+                    float terminator = smoothstep(0.0, 0.6, lightFacing);
+                    float viewDotLight = dot(normalize(v_surfaceToView), normalize(v_surfaceToLight));
+                    float behindSun = smoothstep(-0.2, 2.0, -viewDotLight);
+                    
+                    vec3 atmosphereColor = mix(dayAtmosphereColor, redAtmosphereColor, behindSun);
+                    float atmosphereAtten = mix(0.0, 1.0, terminator);
+
+                    finalColor = mix(finalColor, atmosphereColor, clamp(fresnel * atmosphereIntensity * atmosphereAtten, 0.0, 1.0));
+                }
+
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `;
+
+        const starVertexShaderSource = `
+            attribute vec3 a_position;
+            attribute vec3 a_color;
+            attribute float a_size;
+            attribute float a_alpha;
+            uniform mat4 u_modelViewMatrix;
+            uniform mat4 u_projectionMatrix;
+            varying vec3 v_color;
+            varying float v_alpha;
+
+            void main() {
+                vec4 mvPos = u_modelViewMatrix * vec4(a_position, 1.0);
+                gl_Position = u_projectionMatrix * mvPos;
+                gl_PointSize = clamp(a_size, 1.0, 2.0);
+                v_color = a_color;
+                v_alpha = a_alpha;
+            }
+        `;
+
+        const starFragmentShaderSource = `
+            precision lowp float;
+            varying vec3 v_color;
+            varying float v_alpha;
+            void main() {
+                vec2 coord = gl_PointCoord - vec2(0.5);
+                float dist = length(coord);
+
+                vec3 col = v_color + 0.25;
+
+                gl_FragColor = vec4(col, v_alpha);
+            }
+        `;
+
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        function createProgram(gl, vsSource, fsSource) {
+            const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
+            const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+            
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Unable to initialize the shader program: ' + gl.getProgramInfoLog(program));
+                return null;
+            }
+
+            return program;
+        }
+
+        function identityMatrix() {
+            return [
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1
+            ];
+        }
+
+        function perspectiveMatrix(fov, aspect, near, far) {
+            const f = 1.0 / Math.tan(fov / 2);
+            const rangeInv = 1.0 / (near - far);
+            return [
+                f / aspect, 0, 0, 0,
+                0, f, 0, 0,
+                0, 0, (near + far) * rangeInv, -1,
+                0, 0, near * far * rangeInv * 2, 0
+            ];
+        }
+
+        function translationMatrix(tx, ty, tz) {
+            return [
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                tx, ty, tz, 1
+            ];
+        }
+
+        function multiplyMatrices(a, b) {
+            const c = [];
+            for (let i = 0; i < 4; i++) {
+                for (let j = 0; j < 4; j++) {
+                    c[i * 4 + j] = 0;
+                    for (let k = 0; k < 4; k++) {
+                        c[i * 4 + j] += a[i * 4 + k] * b[k * 4 + j];
+                    }
+                }
+            }
+            return c;
+        }
+
+        function rotationYMatrix(angle) {
+            const c = Math.cos(angle);
+            const s = Math.sin(angle);
+            return [
+                c, 0, s, 0,
+                0, 1, 0, 0,
+                -s, 0, c, 0,
+                0, 0, 0, 1
+            ];
+        }
+
+        function rotationXMatrix(angle) {
+            const c = Math.cos(angle);
+            const s = Math.sin(angle);
+            return [
+                1, 0, 0, 0,
+                0, c, s, 0,
+                0, -s, c, 0,
+                0, 0, 0, 1
+            ];
+        }
+
+        function rotationZMatrix(angle) {
+            const c = Math.cos(angle);
+            const s = Math.sin(angle);
+            return [
+                c, -s, 0, 0,
+                s, c, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1
+            ];
+        }
+
+        function scaleMatrix(s) {
+            return [
+                s, 0, 0, 0,
+                0, s, 0, 0,
+                0, 0, s, 0,
+                0, 0, 0, 1
+            ];
+        }
+
+        function normalMatrix(modelViewMatrix) {
+            const m = modelViewMatrix;
+            const det = m[0]*(m[5]*m[10] - m[9]*m[6]) - m[4]*(m[1]*m[10] - m[9]*m[2]) + m[8]*(m[1]*m[6] - m[5]*m[2]);
+            if (det === 0) return identityMatrix(); 
+
+            const invDet = 1.0 / det;
+
+            return [
+                (m[5]*m[10] - m[9]*m[6]) * invDet, (m[8]*m[6] - m[4]*m[10]) * invDet, (m[4]*m[9] - m[8]*m[5]) * invDet, 0,
+                (m[9]*m[2] - m[1]*m[10]) * invDet, (m[0]*m[10] - m[8]*m[2]) * invDet, (m[8]*m[1] - m[0]*m[9]) * invDet, 0,
+                (m[1]*m[6] - m[5]*m[2]) * invDet, (m[4]*m[2] - m[0]*m[6]) * invDet, (m[0]*m[5] - m[4]*m[1]) * invDet, 0,
+                0, 0, 0, 1
+            ];
+        }
+
+        function createSphere(radius, latitudeBands, longitudeBands, color) {
+            const vertexPositions = [];
+            const colors = [];
+            const texCoords = [];
+            const indices = [];
+            const normals = [];
+
+            for (let latNumber = 0; latNumber <= latitudeBands; latNumber++) {
+                const theta = latNumber * Math.PI / latitudeBands;
+                const sinTheta = Math.sin(theta);
+                const cosTheta = Math.cos(theta);
+
+                for (let longNumber = 0; longNumber <= longitudeBands; longNumber++) {
+                    const phi = longNumber * 2 * Math.PI / longitudeBands;
+                    const sinPhi = Math.sin(phi);
+                    const cosPhi = Math.cos(phi);
+
+                    // Normal
+                    const x = cosPhi * sinTheta;
+                    const y = cosTheta;
+                    const z = sinPhi * sinTheta;
+                    
+                    // Posicao
+                    vertexPositions.push(radius * x);
+                    vertexPositions.push(radius * y);
+                    vertexPositions.push(radius * z);
+
+                    normals.push(x, y, z);
+
+                    // Textura
+                    const u = 1 - (longNumber / longitudeBands);
+                    const v = 1 - (latNumber / latitudeBands);
+                    texCoords.push(u, v);
+
+                    colors.push(color[0], color[1], color[2]);
+                }
+            }
+
+            for (let latNumber = 0; latNumber < latitudeBands; latNumber++) {
+                for (let longNumber = 0; longNumber < longitudeBands; longNumber++) {
+                    const first = (latNumber * (longitudeBands + 1)) + longNumber;
+                    const second = first + longitudeBands + 1;
+                    
+                    indices.push(first, second, first + 1);
+                    indices.push(second, second + 1, first + 1);
+                }
+            }
+
+            return {
+                positions: new Float32Array(vertexPositions),
+                normals: new Float32Array(normals),
+                texCoords: new Float32Array(texCoords),
+                colors: new Float32Array(colors),
+                indices: new Uint16Array(indices),
+                numIndices: indices.length
+            };
+        }
+        
+        let earth;
+        let sun;
+        let moon;
+        let uLightSourcePositionLocation; 
+        let uIsSunLocation;
+        let uIsMoonLocation;
+        let uNormalMatrixLocation;
+        let uSamplerLocation;
+        let uIsGlowLocation;
+   
+        let starProgram;
+        let starPositionBuffer;
+        let starColorBuffer;
+        let starSizeBuffer;
+        let starAlphaBuffer;
+        let starCount = 2000;
+
+        function initStars(count) {
+            starCount = count || starCount;
+            const positions = new Float32Array(starCount * 3);
+            const colors = new Float32Array(starCount * 3);
+            const sizes = new Float32Array(starCount);
+            const alphas = new Float32Array(starCount);
+            const minR = 500.0;
+            const maxR = 8000.0;
+            
+            for (let i = 0; i < starCount; i++) {
+                let z = (Math.random() * 2) - 1;
+                let t = Math.random() * Math.PI * 2;
+                let r = Math.sqrt(1 - z*z);
+                let x = r * Math.cos(t);
+                let y = r * Math.sin(t);
+
+                let radius = minR + Math.random() * (maxR - minR);
+                positions[i*3+0] = x * radius;
+                positions[i*3+1] = y * radius;
+                positions[i*3+2] = z * radius;
+
+                let alpha = Math.random();
+                alphas[i] = alpha;
+
+                const rcol = 0.2 + 0.1 * 8*Math.random();
+                const gcol = 0.6 + 0.2 * (1.0 - Math.abs(Math.random() - 0.5) * 2.0);
+                const bcol = 0.6 + 0.1 * 8*Math.random();
+                colors[i*3+0] = rcol;
+                colors[i*3+1] = gcol;
+                colors[i*3+2] = bcol;
+                sizes[i] = 2.0 + Math.pow(Math.random(), 2.5) * 40.0;
+            }
+
+            starPositionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, starPositionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+            starColorBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, starColorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+
+            starSizeBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, starSizeBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, sizes, gl.STATIC_DRAW);
+
+            starAlphaBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, starAlphaBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, alphas, gl.STATIC_DRAW);
+
+            starProgram = createProgram(gl, starVertexShaderSource, starFragmentShaderSource);
+        }
+
+        function drawStars(viewMatrix, projectionMatrix) {
+            if (!starProgram) return;
+            gl.useProgram(starProgram);
+
+            const aPos = gl.getAttribLocation(starProgram, 'a_position');
+            const aColor = gl.getAttribLocation(starProgram, 'a_color');
+            const aSize = gl.getAttribLocation(starProgram, 'a_size');
+            const uMV = gl.getUniformLocation(starProgram, 'u_modelViewMatrix');
+            const aAlpha = gl.getAttribLocation(starProgram, 'a_alpha');
+            const uP = gl.getUniformLocation(starProgram, 'u_projectionMatrix');
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, starPositionBuffer);
+            gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(aPos);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, starColorBuffer);
+            gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(aColor);
+
+            if (aSize !== -1 && starSizeBuffer) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, starSizeBuffer);
+                gl.vertexAttribPointer(aSize, 1, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(aSize);
+            }
+            if (aAlpha !== -1 && starAlphaBuffer) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, starAlphaBuffer);
+                gl.vertexAttribPointer(aAlpha, 1, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(aAlpha);
+            }
+
+            gl.uniformMatrix4fv(uMV, false, viewMatrix);
+            gl.uniformMatrix4fv(uP, false, projectionMatrix);
+
+            gl.depthMask(false);
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+            gl.drawArrays(gl.POINTS, 0, starCount);
+
+            if (aSize !== -1) gl.disableVertexAttribArray(aSize);
+                if (aAlpha !== -1) gl.disableVertexAttribArray(aAlpha);
+
+            gl.disable(gl.BLEND);
+            gl.depthMask(true);
+            gl.useProgram(program);
+        }
+
+        function initBuffers() {
+
+            // Terra
+            earth = createSphere(0.5, 30, 30, [0.0, 0.5, 1.0]); 
+            
+            earth.positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, earth.positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, earth.positions, gl.STATIC_DRAW);
+
+            earth.normalBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, earth.normalBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, earth.normals, gl.STATIC_DRAW);
+
+            earth.colorBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, earth.colorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, earth.colors, gl.STATIC_DRAW);
+
+            earth.texCoordBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, earth.texCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, earth.texCoords, gl.STATIC_DRAW);
+
+            earth.indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, earth.indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, earth.indices, gl.STATIC_DRAW);
+            
+            // Sol 
+            sun = createSphere(0.7, 32, 32, [1.0, 0.95, 0.8]);
+
+            sun.positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, sun.positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, sun.positions, gl.STATIC_DRAW);
+
+            sun.normalBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, sun.normalBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, sun.normals, gl.STATIC_DRAW);
+
+            sun.colorBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, sun.colorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, sun.colors, gl.STATIC_DRAW);
+
+            sun.indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sun.indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sun.indices, gl.STATIC_DRAW);
+
+            // Lua
+            moon = createSphere(0.1, 10, 10, [0.25, 0.25, 0.25]); 
+
+            moon.positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, moon.positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, moon.positions, gl.STATIC_DRAW);
+
+            moon.normalBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, moon.normalBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, moon.normals, gl.STATIC_DRAW);
+
+            moon.colorBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, moon.colorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, moon.colors, gl.STATIC_DRAW);
+
+            if (moon.texCoords) {
+                moon.texCoordBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, moon.texCoordBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, moon.texCoords, gl.STATIC_DRAW);
+            }
+
+            moon.indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, moon.indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, moon.indices, gl.STATIC_DRAW);
+        }
+
+        function loadTexture(url, onLoaded) {
+            const texture = gl.createTexture();
+            const image = new Image();
+            image.crossOrigin = "anonymous";
+            image.onload = function() {
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.generateMipmap(gl.TEXTURE_2D);
+                gl.bindTexture(gl.TEXTURE_2D, null);
+                onLoaded(texture);
+            };
+            image.onerror = function() {
+                console.warn('Failed to load texture:', url);
+                onLoaded(null);
+            };
+            image.src = url;
+            return texture;
+        }
+
+        let rotationAngle = 0;
+        let lastTime = 0;
+        let simTime = 0;
+
+        const SIMULATION_SPEED = 25 * 86400;
+
+        const EARTH_ROTATION_PERIOD = 86400.0;
+        const MOON_ORBIT_PERIOD = 27.321661 * 86400.0;
+        const EARTH_ORBIT_PERIOD = 365.256363004 * 86400.0;
+        const SUN_ROTATION_PERIOD = 1; 
+
+        let showStars = true; 
+        let cameraFollow = 'earth'; 
+        let cameraPivot = [0, 0, 0];
+
+        function drawSphere(sphere, modelViewMatrix, isSun, isMoon) { 
+            const aPositionLocation = gl.getAttribLocation(program, 'a_position');
+            const aNormalLocation = gl.getAttribLocation(program, 'a_normal');
+            const aColorLocation = gl.getAttribLocation(program, 'a_color');
+            const aTexCoordLocation = gl.getAttribLocation(program, 'a_texCoord');
+            const uModelViewMatrixLocation = gl.getUniformLocation(program, 'u_modelViewMatrix');
+
+            for (let i = 0; i < gl.getParameter(gl.MAX_VERTEX_ATTRIBS); i++) {
+                gl.disableVertexAttribArray(i);
+            }
+
+            if (aPositionLocation !== -1) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, sphere.positionBuffer);
+                gl.vertexAttribPointer(aPositionLocation, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(aPositionLocation);
+            }
+
+            if (aNormalLocation !== -1) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, sphere.normalBuffer);
+                gl.vertexAttribPointer(aNormalLocation, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(aNormalLocation);
+            }
+
+            if (aColorLocation !== -1) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, sphere.colorBuffer);
+                gl.vertexAttribPointer(aColorLocation, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(aColorLocation);
+            }
+
+            if (sphere.texCoordBuffer && aTexCoordLocation !== -1) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, sphere.texCoordBuffer);
+                gl.vertexAttribPointer(aTexCoordLocation, 2, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(aTexCoordLocation);
+            }
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphere.indexBuffer);
+            
+            gl.uniformMatrix4fv(uModelViewMatrixLocation, false, modelViewMatrix);
+
+            const normalMat = normalMatrix(modelViewMatrix);
+            gl.uniformMatrix4fv(uNormalMatrixLocation, false, normalMat);
+
+            gl.uniform1i(uIsSunLocation, isSun ? 1 : 0);
+            gl.uniform1i(uIsMoonLocation, isMoon ? 1 : 0);
+
+            if (!isSun && !isMoon && sphere.texture) {
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, sphere.texture);
+                if (uSamplerLocation) gl.uniform1i(uSamplerLocation, 0);
+            } else {
+                gl.bindTexture(gl.TEXTURE_2D, null);
+            }
+
+            gl.drawElements(gl.TRIANGLES, sphere.numIndices, gl.UNSIGNED_SHORT, 0);
+        }
+
+        function drawScene(currentTime) {
+            currentTime *= 0.001;
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+            
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            simTime += deltaTime * SIMULATION_SPEED;
+
+            const earthSpinAngle   = -1*(simTime / EARTH_ROTATION_PERIOD) * Math.PI * 2; 
+            const moonOrbitAngle   = -1*(simTime / MOON_ORBIT_PERIOD) * Math.PI * 2;
+            const earthOrbitAngle  = -1*(simTime / EARTH_ORBIT_PERIOD) * Math.PI * 2;
+            const sunRotationAngle = (simTime / SUN_ROTATION_PERIOD) * Math.PI * 2;
+
+            const sunOrbitRadius = 10.5;
+            const sunX_world = Math.cos(earthOrbitAngle) * sunOrbitRadius;
+            const sunY_world = 0;
+            const sunZ_world = Math.sin(earthOrbitAngle) * sunOrbitRadius;
+
+            if (cameraFollow === 'sun') {
+                cameraPivot[0] = sunX_world;
+                cameraPivot[1] = sunY_world;
+                cameraPivot[2] = sunZ_world;
+            } else if (cameraFollow === 'earth') {
+                cameraPivot[0] = 0;
+                cameraPivot[1] = 0;
+                cameraPivot[2] = 0;
+            }
+
+            const transToTarget = translationMatrix(-cameraPivot[0], -cameraPivot[1], -cameraPivot[2]);
+            const transBack = translationMatrix(0, 0, zoom);
+            const viewMatrix = multiplyMatrices(transBack, transToTarget);
+
+            const starModelTransform = translationMatrix(sunX_world, sunY_world, sunZ_world);
+            const starModelView = multiplyMatrices(starModelTransform, viewMatrix);
+
+            if (showStars) {
+                drawStars(starModelView, projectionMatrix);
+            }
+            
+            const sunX_eye = viewMatrix[0] * sunX_world + viewMatrix[4] * sunY_world + viewMatrix[8] * sunZ_world + viewMatrix[12] * 1;
+            const sunY_eye = viewMatrix[1] * sunX_world + viewMatrix[5] * sunY_world + viewMatrix[9] * sunZ_world + viewMatrix[13] * 1;
+            const sunZ_eye = viewMatrix[2] * sunX_world + viewMatrix[6] * sunY_world + viewMatrix[10] * sunZ_world + viewMatrix[14] * 1;
+            
+            gl.uniform3f(uLightSourcePositionLocation, sunX_eye, sunY_eye, sunZ_eye);
+
+            // Terra
+            const earthRotation = rotationYMatrix(earthSpinAngle);
+            const earthTilt = rotationZMatrix(23.44 * Math.PI / 180);
+            const earthTiltedRotation = multiplyMatrices(earthTilt, earthRotation);
+            const earthModelViewMatrix = multiplyMatrices(earthTiltedRotation, viewMatrix);
+            drawSphere(earth, earthModelViewMatrix, false, false); 
+
+            // Lua
+            const moonOrbitRadius = 1.0; 
+            const inclination = 10 * Math.PI / 180; 
+            const moonSpin = rotationYMatrix(moonOrbitAngle);
+            const moonInclination = rotationXMatrix(inclination);
+
+            const moonTranslate = translationMatrix(
+                Math.cos(moonOrbitAngle) * moonOrbitRadius,
+                0,
+                Math.sin(moonOrbitAngle) * moonOrbitRadius
+            ); 
+            
+            let moonTransform = multiplyMatrices(moonSpin, moonTranslate);
+            moonTransform = multiplyMatrices(moonTransform, moonInclination);
+            const moonModelViewMatrix = multiplyMatrices(moonTransform, viewMatrix);
+            
+            drawSphere(moon, moonModelViewMatrix, false, true); 
+            
+            // Sol
+            const sunOrbitTranslate = translationMatrix(sunX_world, sunY_world, sunZ_world); 
+            const sunSpin = rotationYMatrix(sunRotationAngle);
+            const sunTransform = multiplyMatrices(sunSpin, sunOrbitTranslate);
+            const sunModelViewMatrix = multiplyMatrices(sunTransform, viewMatrix);
+            
+            drawSphere(sun, sunModelViewMatrix, true, false); 
+            if (uIsGlowLocation) {
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+                gl.depthMask(false);
+
+                const glowScale = 3.5; 
+                const scaleMat = scaleMatrix(glowScale);
+                const glowModelView = multiplyMatrices(scaleMat, sunModelViewMatrix);
+
+                gl.uniform1f(uIsSunLocation, 1.0);
+                gl.uniform1f(uIsMoonLocation, 0.0);
+                gl.uniform1f(uIsGlowLocation, 1.0);
+
+                drawSphere(sun, glowModelView, true, false);
+
+                gl.uniform1f(uIsGlowLocation, 0.0);
+                gl.depthMask(true);
+                gl.disable(gl.BLEND);
+            }
+
+            requestAnimationFrame(drawScene);
+        }
+        
+        function main() {
+            gl      = getRenderingContext();
+            program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+            gl.useProgram(program);
+
+            const uProjectionMatrixLocation = gl.getUniformLocation(program, 'u_projectionMatrix');
+            uLightSourcePositionLocation    = gl.getUniformLocation(program, 'u_lightSourcePosition');
+            uIsSunLocation                  = gl.getUniformLocation(program, 'u_isSun');
+            uIsMoonLocation                 = gl.getUniformLocation(program, 'u_isMoon');
+            uNormalMatrixLocation           = gl.getUniformLocation(program, 'u_normalMatrix');
+            uSamplerLocation                = gl.getUniformLocation(program, 'u_sampler');
+            uIsGlowLocation                 = gl.getUniformLocation(program, 'u_isGlow');
+
+            const fieldOfView = 20 * Math.PI / 180;
+
+            function resizeCanvas() {
+                canvas.width = canvas.clientWidth;
+                canvas.height = canvas.clientHeight;
+                gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+                const aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
+                projectionMatrix = perspectiveMatrix(fieldOfView, aspect, 0.1, 10000.0);
+                gl.useProgram(program);
+                gl.uniformMatrix4fv(uProjectionMatrixLocation, false, projectionMatrix);
+            }
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            const btnEarth = document.getElementById('follow-earth');
+            const btnSun = document.getElementById('follow-sun');
+            const btnShowStars = document.getElementById('show-stars');
+
+            btnEarth.addEventListener('click', function() { cameraFollow = 'earth';});
+            btnSun.addEventListener('click', function() { cameraFollow = 'sun'; });
+            btnShowStars.addEventListener('click', function() { showStars = !showStars; });
+
+            initBuffers();
+            initStars(20000);
+
+            const earthTextureUrl = 'https://upload.wikimedia.org/wikipedia/commons/0/05/Land_ocean_ice_cloud_1024.jpg';
+            loadTexture(earthTextureUrl, function(tex) {
+                earth.texture = tex;
+            });
+            requestAnimationFrame(drawScene);
+        }
+
+        window.onload = main;
+
+        document.body.addEventListener('wheel', function(event) {
+            event.preventDefault();
+            if (event.deltaY < 0) {
+                zoom = zoom*0.9 ;
+            } else if (event.deltaY > 0) {
+                zoom = zoom*1.1;
+            }
+        });
+    </script>
+</body>
+</html>
